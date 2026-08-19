@@ -20,7 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
@@ -38,69 +38,70 @@ data class MediaItemData(
 
 class MainActivity : ComponentActivity() {
 
-    private val imported = mutableStateListOf<MediaItemData>()
+    private val library = mutableStateListOf<MediaItemData>()
 
-    private val picker = registerForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
+    private val picker =
+        registerForActivityResult(
+            ActivityResultContracts.OpenMultipleDocuments()
+        ) { uris ->
 
-        uris?.forEachIndexed { index, uri ->
+            uris?.forEach { uri ->
 
-            try {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                val mime =
+                    contentResolver.getType(uri) ?: ""
+
+                val type =
+                    if (mime.startsWith("audio/"))
+                        "Audio"
+                    else
+                        "Film"
+
+                library.add(
+                    MediaItemData(
+                        id = System.currentTimeMillis(),
+                        title =
+                            uri.lastPathSegment
+                                ?: "Nowy materiał",
+                        type = type,
+                        source = "Lokalny plik",
+                        uri = uri.toString()
+                    )
                 )
-            } catch (_: Exception) {
             }
 
-            val mime = contentResolver.getType(uri) ?: ""
-
-            val type =
-                if (mime.startsWith("audio/")) {
-                    "Audio"
-                } else {
-                    "Film"
-                }
-
-            imported.add(
-                MediaItemData(
-                    id = System.currentTimeMillis() + index,
-                    title = uri.lastPathSegment
-                        ?.substringAfterLast("/")
-                        ?: "Nowy materiał",
-                    type = type,
-                    source = "Lokalny plik",
-                    uri = uri.toString()
-                )
-            )
+            saveLibrary()
         }
 
-        saveLibrary()
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
 
         loadLibrary()
 
         setContent {
-            MediaHubTheme {
+
+            MaterialTheme {
+
                 MediaHubApp(
-                    items = imported,
+                    items = library,
+
                     onImport = {
                         picker.launch(
-                            arrayOf("video/*", "audio/*")
+                            arrayOf(
+                                "video/*",
+                                "audio/*"
+                            )
                         )
                     },
-                    onAddExternal = { item ->
-                        imported.add(item)
+
+                    onAdd = { item ->
+                        library.add(item)
                         saveLibrary()
                     },
+
                     onDelete = { item ->
-                        imported.removeAll {
-                            it.id == item.id
-                        }
+                        library.remove(item)
                         saveLibrary()
                     }
                 )
@@ -112,7 +113,7 @@ class MainActivity : ComponentActivity() {
 
         val array = JSONArray()
 
-        imported.forEach { item ->
+        library.forEach { item ->
 
             val obj = JSONObject()
 
@@ -120,52 +121,77 @@ class MainActivity : ComponentActivity() {
             obj.put("title", item.title)
             obj.put("type", item.type)
             obj.put("source", item.source)
-            obj.put("uri", item.uri ?: JSONObject.NULL)
-            obj.put("link", item.link ?: JSONObject.NULL)
+            obj.put(
+                "uri",
+                item.uri ?: JSONObject.NULL
+            )
+            obj.put(
+                "link",
+                item.link ?: JSONObject.NULL
+            )
 
             array.put(obj)
         }
 
         getSharedPreferences(
             "mediahub",
-            Context.MODE_PRIVATE
+            MODE_PRIVATE
         )
             .edit()
-            .putString("library", array.toString())
+            .putString(
+                "library",
+                array.toString()
+            )
             .apply()
     }
 
     private fun loadLibrary() {
 
-        val saved = getSharedPreferences(
-            "mediahub",
-            Context.MODE_PRIVATE
-        )
-            .getString("library", null)
-            ?: return
+        val text =
+            getSharedPreferences(
+                "mediahub",
+                MODE_PRIVATE
+            )
+                .getString(
+                    "library",
+                    null
+                )
+                ?: return
 
         try {
 
-            val array = JSONArray(saved)
+            val array = JSONArray(text)
 
             for (i in 0 until array.length()) {
 
-                val obj = array.getJSONObject(i)
+                val obj =
+                    array.getJSONObject(i)
 
-                imported.add(
+                library.add(
                     MediaItemData(
-                        id = obj.getLong("id"),
-                        title = obj.getString("title"),
-                        type = obj.getString("type"),
-                        source = obj.getString("source"),
-                        uri = if (
-                            obj.isNull("uri")
-                        ) null
-                        else obj.getString("uri"),
-                        link = if (
-                            obj.isNull("link")
-                        ) null
-                        else obj.getString("link")
+                        id =
+                            obj.getLong("id"),
+
+                        title =
+                            obj.getString("title"),
+
+                        type =
+                            obj.getString("type"),
+
+                        source =
+                            obj.getString("source"),
+
+                        uri =
+                            if (obj.isNull("uri"))
+                                null
+                            else
+                                obj.getString("uri"),
+
+                        link =
+                            if (obj.isNull("link"))
+                                null
+                            else
+                                obj.getString("link")
                     )
                 )
             }
@@ -176,39 +202,27 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MediaHubTheme(
-    content: @Composable () -> Unit
-) {
-
-    MaterialTheme(
-        colorScheme = lightColorScheme(),
-        content = content
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun MediaHubApp(
     items: List<MediaItemData>,
     onImport: () -> Unit,
-    onAddExternal: (MediaItemData) -> Unit,
+    onAdd: (MediaItemData) -> Unit,
     onDelete: (MediaItemData) -> Unit
 ) {
+
+    var search by remember {
+        mutableStateOf("")
+    }
 
     var selected by remember {
         mutableStateOf<MediaItemData?>(null)
     }
 
-    var selectedExternal by remember {
+    var external by remember {
         mutableStateOf<MediaItemData?>(null)
     }
 
-    var showAddDialog by remember {
+    var addDialog by remember {
         mutableStateOf(false)
-    }
-
-    var search by remember {
-        mutableStateOf("")
     }
 
     if (selected != null) {
@@ -223,12 +237,13 @@ fun MediaHubApp(
         return
     }
 
-    val filtered = items.filter {
-        it.title.contains(
-            search,
-            ignoreCase = true
-        )
-    }
+    val filtered =
+        items.filter {
+            it.title.contains(
+                search,
+                ignoreCase = true
+            )
+        }
 
     Scaffold(
 
@@ -244,21 +259,25 @@ fun MediaHubApp(
 
                     IconButton(
                         onClick = {
-                            showAddDialog = true
+                            addDialog = true
                         }
                     ) {
+
                         Icon(
                             Icons.Default.AddLink,
-                            contentDescription = "Dodaj materiał"
+                            contentDescription =
+                                "Dodaj link"
                         )
                     }
 
                     IconButton(
                         onClick = onImport
                     ) {
+
                         Icon(
                             Icons.Default.FolderOpen,
-                            contentDescription = "Dodaj pliki"
+                            contentDescription =
+                                "Dodaj pliki"
                         )
                     }
                 }
@@ -273,7 +292,8 @@ fun MediaHubApp(
 
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Dodaj plik"
+                    contentDescription =
+                        "Dodaj plik"
                 )
             }
         }
@@ -282,15 +302,17 @@ fun MediaHubApp(
 
         Column(
 
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(20.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(20.dp)
         ) {
 
             Text(
                 "Twoja biblioteka",
-                style = MaterialTheme.typography.headlineMedium
+                style =
+                    MaterialTheme.typography.headlineMedium
             )
 
             Spacer(
@@ -305,20 +327,21 @@ fun MediaHubApp(
                     search = it
                 },
 
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                singleLine = true,
+
+                label = {
+                    Text("Szukaj")
+                },
 
                 leadingIcon = {
                     Icon(
                         Icons.Default.Search,
                         contentDescription = null
                     )
-                },
-
-                placeholder = {
-                    Text("Szukaj materiałów...")
-                },
-
-                singleLine = true
+                }
             )
 
             Spacer(
@@ -328,40 +351,16 @@ fun MediaHubApp(
             if (filtered.isEmpty()) {
 
                 Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier.fillMaxSize(),
+
+                    contentAlignment =
+                        Alignment.Center
                 ) {
 
-                    Column(
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally
-                    ) {
-
-                        Icon(
-                            Icons.Default.Movie,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp)
-                        )
-
-                        Spacer(
-                            Modifier.height(12.dp)
-                        )
-
-                        Text(
-                            if (items.isEmpty())
-                                "Biblioteka jest pusta"
-                            else
-                                "Nie znaleziono materiału"
-                        )
-
-                        Spacer(
-                            Modifier.height(8.dp)
-                        )
-
-                        Text(
-                            "Dodaj plik lub materiał z serwisu."
-                        )
-                    }
+                    Text(
+                        "Biblioteka jest pusta"
+                    )
                 }
 
             } else {
@@ -370,7 +369,7 @@ fun MediaHubApp(
 
                     columns =
                         GridCells.Adaptive(
-                            minSize = 230.dp
+                            minSize = 220.dp
                         ),
 
                     horizontalArrangement =
@@ -392,9 +391,12 @@ fun MediaHubApp(
                                     item.source ==
                                     "Lokalny plik"
                                 ) {
+
                                     selected = item
+
                                 } else {
-                                    selectedExternal = item
+
+                                    external = item
                                 }
                             },
 
@@ -408,31 +410,31 @@ fun MediaHubApp(
         }
     }
 
-    if (showAddDialog) {
+    if (addDialog) {
 
-        AddExternalDialog(
+        AddMediaDialog(
 
             onDismiss = {
-                showAddDialog = false
+                addDialog = false
             },
 
-            onAdd = { item ->
+            onAdd = {
 
-                onAddExternal(item)
+                onAdd(it)
 
-                showAddDialog = false
+                addDialog = false
             }
         )
     }
 
-    selectedExternal?.let { item ->
+    external?.let { item ->
 
         OpenChoiceDialog(
 
             item = item,
 
             onClose = {
-                selectedExternal = null
+                external = null
             }
         )
     }
@@ -458,9 +460,12 @@ fun MediaCard(
         ) {
 
             Row(
-                Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth(),
+
                 horizontalArrangement =
                     Arrangement.SpaceBetween,
+
                 verticalAlignment =
                     Alignment.CenterVertically
             ) {
@@ -474,7 +479,7 @@ fun MediaCard(
                     contentDescription = null,
 
                     modifier =
-                        Modifier.size(46.dp)
+                        Modifier.size(42.dp)
                 )
 
                 Box {
@@ -487,29 +492,40 @@ fun MediaCard(
 
                         Icon(
                             Icons.Default.MoreVert,
-                            contentDescription = "Więcej"
+                            contentDescription =
+                                "Menu"
                         )
                     }
 
                     DropdownMenu(
+
                         expanded = menu,
+
                         onDismissRequest = {
                             menu = false
                         }
+
                     ) {
 
                         DropdownMenuItem(
+
                             text = {
                                 Text("Usuń")
                             },
+
                             onClick = {
+
                                 menu = false
+
                                 onDelete()
                             },
+
                             leadingIcon = {
+
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = null
+                                    contentDescription =
+                                        null
                                 )
                             }
                         )
@@ -532,29 +548,14 @@ fun MediaCard(
             )
 
             Text(
-                "${item.type} • ${item.source}",
-                style =
-                    MaterialTheme.typography.bodyMedium
+                "${item.type} • ${item.source}"
             )
-
-            if (
-                item.source != "Lokalny plik"
-            ) {
-
-                Spacer(
-                    Modifier.height(10.dp)
-                )
-
-                Text(
-                    "🌐 Materiał zewnętrzny"
-                )
-            }
         }
     }
 }
 
 @Composable
-fun AddExternalDialog(
+fun AddMediaDialog(
     onDismiss: () -> Unit,
     onAdd: (MediaItemData) -> Unit
 ) {
@@ -575,14 +576,15 @@ fun AddExternalDialog(
         mutableStateOf(false)
     }
 
-    val sources = listOf(
-        "Netflix",
-        "YouTube",
-        "Amazon Prime",
-        "Spotify",
-        "Disney+",
-        "Inne"
-    )
+    val sources =
+        listOf(
+            "Netflix",
+            "YouTube",
+            "Amazon Prime",
+            "Spotify",
+            "Disney+",
+            "Inne"
+        )
 
     AlertDialog(
 
@@ -597,15 +599,19 @@ fun AddExternalDialog(
             Column {
 
                 OutlinedTextField(
+
                     value = title,
+
                     onValueChange = {
                         title = it
                     },
+
+                    modifier =
+                        Modifier.fillMaxWidth(),
+
                     label = {
                         Text("Nazwa")
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth()
+                    }
                 )
 
                 Spacer(
@@ -618,16 +624,20 @@ fun AddExternalDialog(
                         onClick = {
                             expanded = true
                         },
+
                         modifier =
                             Modifier.fillMaxWidth()
                     ) {
+
                         Text(
                             "Źródło: $source"
                         )
                     }
 
                     DropdownMenu(
+
                         expanded = expanded,
+
                         onDismissRequest = {
                             expanded = false
                         }
@@ -636,11 +646,15 @@ fun AddExternalDialog(
                         sources.forEach { option ->
 
                             DropdownMenuItem(
+
                                 text = {
                                     Text(option)
                                 },
+
                                 onClick = {
+
                                     source = option
+
                                     expanded = false
                                 }
                             )
@@ -653,18 +667,19 @@ fun AddExternalDialog(
                 )
 
                 OutlinedTextField(
+
                     value = link,
+
                     onValueChange = {
                         link = it
                     },
-                    label = {
-                        Text("Link do materiału")
-                    },
-                    placeholder = {
-                        Text("https://...")
-                    },
+
                     modifier =
-                        Modifier.fillMaxWidth()
+                        Modifier.fillMaxWidth(),
+
+                    label = {
+                        Text("Link")
+                    }
                 )
             }
         },
@@ -681,12 +696,17 @@ fun AddExternalDialog(
 
                     onAdd(
                         MediaItemData(
+
                             id =
                                 System.currentTimeMillis(),
+
                             title =
                                 title.trim(),
+
                             type = "Film",
+
                             source = source,
+
                             link =
                                 link.trim()
                         )
@@ -694,6 +714,7 @@ fun AddExternalDialog(
                 }
 
             ) {
+
                 Text("Dodaj")
             }
         },
@@ -703,6 +724,7 @@ fun AddExternalDialog(
             TextButton(
                 onClick = onDismiss
             ) {
+
                 Text("Anuluj")
             }
         }
@@ -729,36 +751,16 @@ fun OpenChoiceDialog(
         },
 
         text = {
-            Column {
 
-                Text(
-                    item.title,
-                    style =
-                        MaterialTheme.typography.titleMedium
-                )
-
-                Spacer(
-                    Modifier.height(5.dp)
-                )
-
-                Text(
-                    "Źródło: ${item.source}"
-                )
-
-                Spacer(
-                    Modifier.height(12.dp)
-                )
-
-                Text(
-                    "Online otworzy zapisany link. " +
-                    "Offline uruchomi aplikację źródłową."
-                )
-            }
+            Text(
+                "${item.title}\n\nŹródło: ${item.source}"
+            )
         },
 
         confirmButton = {
 
             Button(
+
                 onClick = {
 
                     openOnline(
@@ -768,6 +770,7 @@ fun OpenChoiceDialog(
 
                     onClose()
                 }
+
             ) {
 
                 Text("Jestem online")
@@ -777,6 +780,7 @@ fun OpenChoiceDialog(
         dismissButton = {
 
             TextButton(
+
                 onClick = {
 
                     openOfflineApp(
@@ -786,6 +790,7 @@ fun OpenChoiceDialog(
 
                     onClose()
                 }
+
             ) {
 
                 Text("Jestem offline")
@@ -821,35 +826,40 @@ fun openOfflineApp(
     context: Context,
     source: String
 ) {
-    val packageName = when (source) {
 
-        "Netflix" ->
-            "com.netflix.mediaclient"
+    val packageName =
+        when (source) {
 
-        "YouTube" ->
-            "com.google.android.youtube"
+            "Netflix" ->
+                "com.netflix.mediaclient"
 
-        "Amazon Prime" ->
-            "com.amazon.avod.thirdpartyclient"
+            "YouTube" ->
+                "com.google.android.youtube"
 
-        "Spotify" ->
-            "com.spotify.music"
+            "Amazon Prime" ->
+                "com.amazon.avod.thirdpartyclient"
 
-        "Disney+" ->
-            "com.disney.disneyplus"
+            "Spotify" ->
+                "com.spotify.music"
 
-        else ->
-            null
-    }
+            "Disney+" ->
+                "com.disney.disneyplus"
+
+            else ->
+                null
+        }
 
     if (packageName == null) {
         return
     }
 
     try {
+
         val intent =
             context.packageManager
-                .getLaunchIntentForPackage(packageName)
+                .getLaunchIntentForPackage(
+                    packageName
+                )
 
         if (intent != null) {
             context.startActivity(intent)
@@ -864,26 +874,31 @@ fun PlayerScreen(
     item: MediaItemData,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
 
-    val player = remember {
+    val context =
+        LocalContext.current
 
-        ExoPlayer
-            .Builder(context)
-            .build()
-            .apply {
+    val player =
+        remember {
 
-                setMediaItem(
-                    ExoMediaItem.fromUri(
-                        Uri.parse(item.uri)
+            ExoPlayer
+                .Builder(context)
+                .build()
+                .apply {
+
+                    setMediaItem(
+                        MediaItem.fromUri(
+                            Uri.parse(
+                                item.uri
+                            )
+                        )
                     )
-                )
 
-                prepare()
+                    prepare()
 
-                playWhenReady = true
-            }
-    }
+                    playWhenReady = true
+                }
+        }
 
     DisposableEffect(Unit) {
 
@@ -893,11 +908,12 @@ fun PlayerScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize()
+        Modifier.fillMaxSize()
     ) {
 
         Row(
-            modifier = Modifier
+
+            Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
 
@@ -911,12 +927,13 @@ fun PlayerScreen(
 
                 Icon(
                     Icons.Default.ArrowBack,
-                    contentDescription = "Wstecz"
+                    contentDescription =
+                        "Wstecz"
                 )
             }
 
             Text(
-                text = item.title,
+                item.title,
                 style =
                     MaterialTheme.typography.titleLarge
             )
