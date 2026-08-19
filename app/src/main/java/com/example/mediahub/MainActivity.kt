@@ -821,21 +821,117 @@ fun openOfflineApp(
     context: Context,
     source: String
 ) {
+    val packageName = when (source) {
 
-    val packageName =
-        when (source) {
+        "Netflix" ->
+            "com.netflix.mediaclient"
 
-            "Netflix" ->
-                "com.netflix.mediaclient"
+        "YouTube" ->
+            "com.google.android.youtube"
 
-            "YouTube" ->
-                "com.google.android.youtube"
+        "Amazon Prime" ->
+            "com.amazon.avod.thirdpartyclient"
 
-            "Amazon Prime" ->
-                "com.amazon.avod.thirdpartyclient"
+        "Spotify" ->
+            "com.spotify.music"
 
-            "Spotify" ->
-                "com.spotify.music"
+        "Disney+" ->
+            "com.disney.disneyplus"
 
-            "Disney+" ->
-                "com.disney.dis
+        else ->
+            null
+    }
+
+    if (packageName == null) {
+        return
+    }
+
+    try {
+        val intent =
+            context.packageManager
+                .getLaunchIntentForPackage(packageName)
+
+        if (intent != null) {
+            context.startActivity(intent)
+        }
+
+    } catch (_: Exception) {
+    }
+}
+
+@Composable
+fun PlayerScreen(
+    item: MediaItemData,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+
+    val player = remember {
+
+        ExoPlayer
+            .Builder(context)
+            .build()
+            .apply {
+
+                setMediaItem(
+                    ExoMediaItem.fromUri(
+                        Uri.parse(item.uri)
+                    )
+                )
+
+                prepare()
+
+                playWhenReady = true
+            }
+    }
+
+    DisposableEffect(Unit) {
+
+        onDispose {
+            player.release()
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+
+            IconButton(
+                onClick = onBack
+            ) {
+
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "Wstecz"
+                )
+            }
+
+            Text(
+                text = item.title,
+                style =
+                    MaterialTheme.typography.titleLarge
+            )
+        }
+
+        AndroidView(
+
+            factory = {
+                PlayerView(it).apply {
+                    player = player
+                }
+            },
+
+            modifier =
+                Modifier.fillMaxSize()
+        )
+    }
+}
