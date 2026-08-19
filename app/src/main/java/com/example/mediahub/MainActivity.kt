@@ -23,8 +23,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -39,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -53,7 +52,8 @@ data class MediaItem(
 
 class MainActivity : ComponentActivity() {
 
-    private val library = mutableStateListOf<MediaItem>()
+    private val library =
+        mutableStateListOf<MediaItem>()
 
     private val picker =
         registerForActivityResult(
@@ -72,12 +72,15 @@ class MainActivity : ComponentActivity() {
 
                 library.add(
                     MediaItem(
-                        id = System.currentTimeMillis() + index,
-                        title = uri.lastPathSegment
-                            ?.substringAfterLast("/")
-                            ?: "Materiał",
-                        source = "Lokalny plik",
-                        uri = uri.toString()
+                        id =
+                            System.currentTimeMillis() + index,
+                        title =
+                            uri.lastPathSegment
+                                ?: "Materiał",
+                        source =
+                            "Lokalny plik",
+                        uri =
+                            uri.toString()
                     )
                 )
             }
@@ -85,15 +88,20 @@ class MainActivity : ComponentActivity() {
             saveLibrary()
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
 
         loadLibrary()
 
         setContent {
+
             MaterialTheme {
-                MediaHub(
+
+                MediaHubScreen(
                     items = library,
+
                     onImport = {
                         picker.launch(
                             arrayOf(
@@ -102,10 +110,12 @@ class MainActivity : ComponentActivity() {
                             )
                         )
                     },
+
                     onAdd = { item ->
                         library.add(item)
                         saveLibrary()
                     },
+
                     onDelete = { item ->
                         library.removeAll {
                             it.id == item.id
@@ -128,8 +138,18 @@ class MainActivity : ComponentActivity() {
             obj.put("id", item.id)
             obj.put("title", item.title)
             obj.put("source", item.source)
-            obj.put("uri", item.uri ?: JSONObject.NULL)
-            obj.put("link", item.link ?: JSONObject.NULL)
+
+            if (item.uri == null) {
+                obj.put("uri", JSONObject.NULL)
+            } else {
+                obj.put("uri", item.uri)
+            }
+
+            if (item.link == null) {
+                obj.put("link", JSONObject.NULL)
+            } else {
+                obj.put("link", item.link)
+            }
 
             array.put(obj)
         }
@@ -139,7 +159,10 @@ class MainActivity : ComponentActivity() {
             Context.MODE_PRIVATE
         )
             .edit()
-            .putString("library", array.toString())
+            .putString(
+                "library",
+                array.toString()
+            )
             .apply()
     }
 
@@ -150,32 +173,53 @@ class MainActivity : ComponentActivity() {
                 "mediahub",
                 Context.MODE_PRIVATE
             )
-                .getString("library", null)
+                .getString(
+                    "library",
+                    null
+                )
                 ?: return
 
         try {
 
-            val array = JSONArray(saved)
+            val array =
+                JSONArray(saved)
 
-            for (i in 0 until array.length()) {
+            for (
+                i in 0 until array.length()
+            ) {
 
-                val obj = array.getJSONObject(i)
+                val obj =
+                    array.getJSONObject(i)
 
                 library.add(
                     MediaItem(
-                        id = obj.getLong("id"),
-                        title = obj.getString("title"),
-                        source = obj.getString("source"),
+
+                        id =
+                            obj.getLong("id"),
+
+                        title =
+                            obj.getString("title"),
+
+                        source =
+                            obj.getString("source"),
+
                         uri =
-                            if (obj.isNull("uri"))
+                            if (
+                                obj.isNull("uri")
+                            ) {
                                 null
-                            else
-                                obj.getString("uri"),
+                            } else {
+                                obj.getString("uri")
+                            },
+
                         link =
-                            if (obj.isNull("link"))
+                            if (
+                                obj.isNull("link")
+                            ) {
                                 null
-                            else
+                            } else {
                                 obj.getString("link")
+                            }
                     )
                 )
             }
@@ -185,20 +229,22 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MediaHub(
+fun MediaHubScreen(
     items: List<MediaItem>,
     onImport: () -> Unit,
     onAdd: (MediaItem) -> Unit,
     onDelete: (MediaItem) -> Unit
 ) {
 
+    val context =
+        LocalContext.current
+
     var search by remember {
         mutableStateOf("")
     }
 
-    var addDialog by remember {
+    var showAddDialog by remember {
         mutableStateOf(false)
     }
 
@@ -228,38 +274,32 @@ fun MediaHub(
 
                     TextButton(
                         onClick = {
-                            addDialog = true
+                            showAddDialog = true
                         }
                     ) {
-                        Text("LINK")
+                        Text("Dodaj link")
                     }
                 }
             )
-        },
-
-        floatingActionButton = {
-
-            FloatingActionButton(
-                onClick = onImport
-            ) {
-                Text("+")
-            }
         }
 
     ) { padding ->
 
         Column(
 
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
         ) {
 
             Text(
                 text = "Twoja biblioteka",
                 style =
-                    MaterialTheme.typography.headlineMedium
+                    MaterialTheme
+                        .typography
+                        .headlineMedium
             )
 
             Spacer(
@@ -288,12 +328,25 @@ fun MediaHub(
                 Modifier.height(16.dp)
             )
 
+            Button(
+                onClick = onImport,
+                modifier =
+                    Modifier.fillMaxWidth()
+            ) {
+
+                Text(
+                    "Dodaj film lub audio"
+                )
+            }
+
+            Spacer(
+                Modifier.height(16.dp)
+            )
+
             if (filtered.isEmpty()) {
 
                 Text(
-                    text =
-                        "Biblioteka jest pusta.\n\n" +
-                        "Naciśnij + aby dodać film lub audio."
+                    "Biblioteka jest pusta."
                 )
 
             } else {
@@ -305,7 +358,7 @@ fun MediaHub(
                 ) {
 
                     items(
-                        filtered,
+                        items = filtered,
                         key = {
                             it.id
                         }
@@ -313,9 +366,11 @@ fun MediaHub(
 
                         MediaCard(
                             item = item,
+
                             onClick = {
                                 selected = item
                             },
+
                             onDelete = {
                                 onDelete(item)
                             }
@@ -326,19 +381,19 @@ fun MediaHub(
         }
     }
 
-    if (addDialog) {
+    if (showAddDialog) {
 
         AddLinkDialog(
 
             onDismiss = {
-                addDialog = false
+                showAddDialog = false
             },
 
             onAdd = {
 
                 onAdd(it)
 
-                addDialog = false
+                showAddDialog = false
             }
         )
     }
@@ -348,7 +403,7 @@ fun MediaHub(
         if (item.uri != null) {
 
             openLocalFile(
-                context = LocalContextHolder.context,
+                context = context,
                 uri = item.uri
             )
 
@@ -356,7 +411,7 @@ fun MediaHub(
 
         } else {
 
-            ExternalChoiceDialog(
+            ExternalDialog(
 
                 item = item,
 
@@ -376,6 +431,7 @@ fun MediaCard(
 ) {
 
     Card(
+
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -391,7 +447,9 @@ fun MediaCard(
             Text(
                 text = item.title,
                 style =
-                    MaterialTheme.typography.titleLarge
+                    MaterialTheme
+                        .typography
+                        .titleLarge
             )
 
             Spacer(
@@ -404,12 +462,13 @@ fun MediaCard(
             )
 
             Spacer(
-                Modifier.height(10.dp)
+                Modifier.height(8.dp)
             )
 
             TextButton(
                 onClick = onDelete
             ) {
+
                 Text("Usuń")
             }
         }
@@ -461,13 +520,19 @@ fun AddLinkDialog(
             Column {
 
                 OutlinedTextField(
+
                     value = title,
+
                     onValueChange = {
                         title = it
                     },
+
                     label = {
                         Text("Nazwa")
-                    }
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth()
                 )
 
                 Spacer(
@@ -479,13 +544,16 @@ fun AddLinkDialog(
                         expanded = true
                     }
                 ) {
+
                     Text(
                         "Usługa: $source"
                     )
                 }
 
                 DropdownMenu(
+
                     expanded = expanded,
+
                     onDismissRequest = {
                         expanded = false
                     }
@@ -502,6 +570,7 @@ fun AddLinkDialog(
                             onClick = {
 
                                 source = option
+
                                 expanded = false
                             }
                         )
@@ -513,13 +582,19 @@ fun AddLinkDialog(
                 )
 
                 OutlinedTextField(
+
                     value = link,
+
                     onValueChange = {
                         link = it
                     },
+
                     label = {
                         Text("Link")
-                    }
+                    },
+
+                    modifier =
+                        Modifier.fillMaxWidth()
                 )
             }
         },
@@ -538,15 +613,19 @@ fun AddLinkDialog(
                         MediaItem(
                             id =
                                 System.currentTimeMillis(),
+
                             title =
                                 title.trim(),
+
                             source = source,
+
                             link =
                                 link.trim()
                         )
                     )
                 }
             ) {
+
                 Text("Dodaj")
             }
         },
@@ -556,6 +635,7 @@ fun AddLinkDialog(
             TextButton(
                 onClick = onDismiss
             ) {
+
                 Text("Anuluj")
             }
         }
@@ -563,13 +643,13 @@ fun AddLinkDialog(
 }
 
 @Composable
-fun ExternalChoiceDialog(
+fun ExternalDialog(
     item: MediaItem,
     onClose: () -> Unit
 ) {
 
     val context =
-        LocalContextHolder.context
+        LocalContext.current
 
     AlertDialog(
 
@@ -580,9 +660,10 @@ fun ExternalChoiceDialog(
         },
 
         text = {
+
             Text(
                 "Źródło: ${item.source}\n\n" +
-                "Wybierz sposób otwarcia."
+                    "Wybierz sposób otwarcia."
             )
         },
 
@@ -600,6 +681,7 @@ fun ExternalChoiceDialog(
                     onClose()
                 }
             ) {
+
                 Text("Jestem online")
             }
         },
@@ -618,15 +700,11 @@ fun ExternalChoiceDialog(
                     onClose()
                 }
             ) {
+
                 Text("Jestem offline")
             }
         }
     )
-}
-
-object LocalContextHolder {
-
-    lateinit var context: Context
 }
 
 fun openLocalFile(
@@ -634,17 +712,20 @@ fun openLocalFile(
     uri: String
 ) {
 
-    val intent = Intent(
-        Intent.ACTION_VIEW,
-        Uri.parse(uri)
-    )
-
-    intent.addFlags(
-        Intent.FLAG_GRANT_READ_URI_PERMISSION
-    )
-
     try {
+
+        val intent =
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse(uri)
+            )
+
+        intent.addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+
         context.startActivity(intent)
+
     } catch (_: Exception) {
     }
 }
@@ -660,12 +741,13 @@ fun openOnline(
 
     try {
 
-        context.startActivity(
+        val intent =
             Intent(
                 Intent.ACTION_VIEW,
                 Uri.parse(link)
             )
-        )
+
+        context.startActivity(intent)
 
     } catch (_: Exception) {
     }
@@ -711,7 +793,10 @@ fun openOfflineApp(
                 )
 
         if (intent != null) {
-            context.startActivity(intent)
+
+            context.startActivity(
+                intent
+            )
         }
 
     } catch (_: Exception) {
